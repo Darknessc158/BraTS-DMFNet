@@ -8,23 +8,24 @@ import os
 import numpy as np
 import nibabel as nib
 from utils import Parser
+import pandas as pd
 
 args = Parser()
 modalities = ('flair', 't1ce', 't1', 't2')
 
 
 train_set = {
-        'root': '/data2/liuxiaopeng/Data/BraTS2018/Train',
+        'root': '/data2/CHAOS/Train',
         'flist': 'all.txt',
         }
 
 valid_set = {
-        'root': '/data2/liuxiaopeng/Data/BraTS2018/Valid',
+        'root': '/data2/CHAOS/Train',
         'flist': 'valid.txt',
         }
 
 test_set = {
-        'root': '/data2/liuxiaopeng/Data/BraTS2018/Test',
+        'root': '/data2/CHAOS/Test',
         'flist': 'test.txt',
         }
 
@@ -68,7 +69,7 @@ def process_f32(path):
         x = images[..., k] #
         y = x[mask] #
         
-        lower = np.percentile(y, 0.2) # 算分位数
+        lower = np.percentile(y, 0.2) #
         upper = np.percentile(y, 99.8)
         
         x[mask & (x < lower)] = lower
@@ -84,6 +85,45 @@ def process_f32(path):
     output = path + 'data_f32.pkl'
     print("saving:",output)
     savepkl(data=(images, label),path=output)
+    
+def getDirOnly(path):
+    return [directory for directory in os.listdir(path) if os.path.isdir(os.path.join(path, directory))]
+
+def generateTrain(root):
+    colname = ["root", "imgNumber", "number_slices", "localImPath", "localMaskPath"]
+    stackList = []
+    typePath = os.path.join(root, "CHAOS/Train/CHAOS_Train_Sets/Train_Sets/MR")
+        
+    for numberDir in getDirOnly(typePath):
+        numberPathT2 = os.path.join(typePath, numberDir,"T2SPIR") #T2 images only
+        number_slices = len(os.listdir(os.path.join(numberPathT2, "DICOM_anon")))
+        
+        localImPath = os.path.join("CHAOS/Train/CHAOS_Train_Sets/Train_Sets/MR", numberDir,
+                                   "T2SPIR", "DICOM_anon")
+        localMaskPath = os.path.join("CHAOS/Train/CHAOS_Train_Sets/Train_Sets/MR", numberDir,
+                                   "T2SPIR", "Ground")
+        row = [root, numberDir, number_slices, localImPath, localMaskPath]
+        stackList.append(row)
+                
+    trainDF = pd.DataFrame(stackList)
+    trainDF.columns = colname
+    return trainDF    
+
+def generateTest(root): # for mgenerateTraine C:\Users\piclt\Desktop\Ecole\4A\ProCom\Data
+    colname = ["root", "imgNumber", "number_slices", "localImPath"]
+    stackList = []
+    typePath = os.path.join(root, "CHAOS/Test/CHAOS_Test_Sets/Test_Sets/MR")
+    for numberDir in getDirOnly(typePath):
+        numberPathT2 = os.path.join(typePath, numberDir,"T2SPIR") #T2 images only
+        localImPath = os.path.join("CHAOS_Test_Sets/Test_Sets/MR", numberDir,
+                                   "T2SPIR", "DICOM_anon")
+        number_slices = len(os.listdir(os.path.join(numberPathT2, "DICOM_anon")))
+        row = [root, numberDir, number_slices, localImPath]
+        stackList.append(row)
+                
+    testDF = pd.DataFrame(stackList)
+    testDF.columns = colname
+    return testDF
 
 def doit(dset):
     root, has_label = dset['root']
@@ -94,8 +134,13 @@ def doit(dset):
     for path in paths:
         process_f32(path)
 
-doit(train_set)
-doit(valid_set)
-# doit(test_set)
-
-
+#doit(train_set)
+# doit(valid_set)
+#doit(test_set)
+root = "data2/"
+df = generateTrain(root)
+df_test = generateTest(root)
+print(df.head())
+print(df_test.head())
+df.to_csv(os.path.join(root, "train.csv"), index=False)
+df_test.to_csv(os.path.join(root, "test.csv"), index=False)
